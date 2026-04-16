@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 permissions:
-  id-token: write    # OIDC 필수
+  id-token: write
   contents: read
 
 jobs:
@@ -19,11 +19,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org/'
 
-      - name: Upgrade npm (OIDC requires npm >= 11)
-        run: npm install -g npm@^11
+      - name: Verify npm version (>= 11 required for OIDC)
+        run: npm --version
 
       - run: npm ci
 
