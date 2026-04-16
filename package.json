@@ -45,6 +45,7 @@
   "homepage": "https://github.com/devbada/fe-api-tracer#readme",
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "fe-api-tracer": "^1.0.3",
     "vitest": "^1.6.0"
   },
   "dependencies": {
