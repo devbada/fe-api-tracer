@@ -46,7 +46,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "fe-api-tracer": "^1.0.3",
-    "vitest": "^1.6.0"
+    "vitest": "^4.1.4"
   },
   "dependencies": {
     "dotenv": "^16.0.0",
