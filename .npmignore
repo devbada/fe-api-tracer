@@ -1,0 +1,9 @@
+tests/
+phases/
+files/
+coverage/
+.env*
+vitest.config.ts
+tsconfig.json
+DEVELOPMENT_PHASES.md
+CONTRIBUTING.md
