@@ -34,7 +34,7 @@ Node.js 20 이상이 필요합니다.
 # 프로젝트에 설치
 npm install -D fe-api-tracer
 
-# 실행
+# 설치 없이 1회용으로 실행
 npx fe-api-tracer
 
 # → docs/api.html 생성됨. 브라우저에서 바로 열 수 있습니다.
@@ -49,6 +49,11 @@ package.json에 스크립트를 등록해두면 편합니다.
     "docs:watch": "fe-api-tracer --watch"
   }
 }
+```
+
+```bash
+# package.json 설정 후 실행
+npm run docs
 ```
 
 ---
