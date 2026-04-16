@@ -27,10 +27,16 @@ export interface ApiTracerConfig {
   root?: string;
   output?: string;
   apiDirs?: string[];
+  /** API 호출 파일의 정규식 패턴 (기본: \.api\.(ts|tsx)$) */
+  apiFilePattern?: string;
+  /** 스캔 대상 디렉토리 (기본: ['src']). store/, lib/ 등 추가 가능 */
+  scanDirs?: string[];
   alias?: Record<string, string>;
   httpClient?: HttpClientConfig;
   trace?: TraceConfig;
   decorators?: DecoratorConfig;
+  /** URL에서 제거할 접두사 패턴 (예: '${process.env.VUE_APP_API_URL}') */
+  urlStripPrefix?: string[];
 }
 
 export interface ApiTracerConfigWithPresets {
@@ -45,11 +51,14 @@ const DEFAULTS: Required<ApiTracerConfig> = {
   root: process.cwd(),
   output: 'docs/api.html',
   apiDirs: ['src/domain/**/api', 'src/shared/api', 'shared/api'],
+  apiFilePattern: '\\.api\\.(ts|tsx)$',
+  scanDirs: ['src'],
   alias: {},
   httpClient: {
-    patterns: ['this.http', 'this.axios', 'apiClient', 'request'],
+    patterns: ['this.http', 'this.axios', 'this.$axios', 'apiClient', 'request'],
     methods: ['get', 'post', 'put', 'patch', 'delete'],
   },
+  urlStripPrefix: [],
   trace: {
     enabled: true,
     exclude: ['Container', 'Mapper', 'Injectable', 'singleton'],
@@ -192,10 +201,13 @@ export function loadConfig(projectRoot: string, preset?: string): Required<ApiTr
   const envConfig = loadEnvConfig(projectRoot);
 
   return {
-    framework:  envConfig.framework  ?? fileConfig.framework  ?? DEFAULTS.framework,
-    root:       envConfig.root       ?? fileConfig.root       ?? projectRoot,
-    output:     envConfig.output     ?? fileConfig.output     ?? DEFAULTS.output,
-    apiDirs:    envConfig.apiDirs    ?? fileConfig.apiDirs    ?? DEFAULTS.apiDirs,
+    framework:      envConfig.framework      ?? fileConfig.framework      ?? DEFAULTS.framework,
+    root:           envConfig.root           ?? fileConfig.root           ?? projectRoot,
+    output:         envConfig.output         ?? fileConfig.output         ?? DEFAULTS.output,
+    apiDirs:        envConfig.apiDirs        ?? fileConfig.apiDirs        ?? DEFAULTS.apiDirs,
+    apiFilePattern: fileConfig.apiFilePattern ?? DEFAULTS.apiFilePattern,
+    scanDirs:       fileConfig.scanDirs      ?? DEFAULTS.scanDirs,
+    urlStripPrefix: fileConfig.urlStripPrefix ?? DEFAULTS.urlStripPrefix,
     alias: {
       ...tsconfigAlias,
       ...DEFAULTS.alias,

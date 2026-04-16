@@ -20,12 +20,12 @@ function loadFile(filePath: string): void {
   loadedFiles.add(filePath);
 }
 
-// src 하위 모든 .ts 파일 사전 로드 (클래스 탐색용)
-export function preloadSourceFiles(projectRoot: string): void {
-  const srcDir = path.join(projectRoot, 'src');
-  if (!fs.existsSync(srcDir)) return;
+// 소스 파일 사전 로드 (클래스 탐색용)
+export function preloadSourceFiles(projectRoot: string, scanDirs?: string[]): void {
+  const dirs = scanDirs && scanDirs.length > 0 ? scanDirs : ['src'];
 
   function walk(dir: string): void {
+    if (!fs.existsSync(dir)) return;
     fs.readdirSync(dir, { withFileTypes: true }).forEach((entry) => {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
@@ -36,7 +36,7 @@ export function preloadSourceFiles(projectRoot: string): void {
     });
   }
 
-  walk(srcDir);
+  dirs.forEach((d) => walk(path.join(projectRoot, d)));
   console.log(`[api-docs] 소스 파일 로드 완료: ${loadedFiles.size}개`);
 }
 

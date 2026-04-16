@@ -38,9 +38,12 @@ function extractUrl(callExpr: CallExpression): string {
   if (args.length === 0) return '';
   const raw = args[0].getText();
   if (raw.startsWith('`')) {
-    return raw.slice(1, -1)
-      .replace(/\$\{([^}]+)\}/g, (_, inner) => `:${inner.trim().split('.').pop()}`)
-      .replace(/^\//, '');
+    let url = raw.slice(1, -1);
+    // 환경변수 prefix 제거: `${process.env.XXX}/api/foo` → `/api/foo`
+    url = url.replace(/^\$\{process\.env\.[^}]+\}/, '');
+    // 나머지 ${변수}를 :param으로 변환
+    url = url.replace(/\$\{([^}]+)\}/g, (_, inner) => `:${inner.trim().split('.').pop()}`);
+    return url.replace(/^\//, '');
   }
   return raw.replace(/^['"]|['"]$/g, '').replace(/^\//, '');
 }
@@ -92,12 +95,14 @@ function getFunctionName(fn: MethodDeclaration | FunctionDeclaration | ArrowFunc
 // ─────────────────────────────────────────────
 function isHttpClientCall(exprText: string, patterns: string[]): boolean {
   return patterns.some((pattern) => {
-    if (pattern.includes('.')) {
-      // "this.http" → exprText가 정확히 "this.http"인지 확인
-      return exprText === pattern;
-    }
-    // "apiClient" → exprText가 "apiClient"인지 확인
-    return exprText === pattern;
+    // 정확히 일치
+    if (exprText === pattern) return true;
+    // 체인 패턴 지원: 패턴 "this.$axios" → "this.store.$axios" 매칭
+    // exprText가 pattern으로 끝나고, 그 앞이 '.'인 경우
+    if (pattern.includes('.') && exprText.endsWith(pattern)) return true;
+    // exprText가 "xxx.패턴"으로 끝나는 경우 (예: exprText="this.store.$axios", pattern="$axios")
+    if (!pattern.includes('.') && (exprText.endsWith('.' + pattern) || exprText === pattern)) return true;
+    return false;
   });
 }
 
@@ -390,18 +395,21 @@ function matchesGlobDir(filePath: string, projectRoot: string, apiDirs: string[]
   });
 }
 
-function findApiFiles(projectRoot: string, apiDirs: string[]): string[] {
-  const srcDir = path.join(projectRoot, 'src');
-  if (!fs.existsSync(srcDir)) return [];
+function findApiFiles(
+  projectRoot: string,
+  apiDirs: string[],
+  scanDirs: string[],
+  apiFilePattern: string
+): string[] {
   const results: string[] = [];
+  const fileRegex = new RegExp(apiFilePattern);
 
   function walk(dir: string): void {
+    if (!fs.existsSync(dir)) return;
     fs.readdirSync(dir, { withFileTypes: true }).forEach((entry) => {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) walk(full);
-      else if (entry.isFile() && /\.api\.(ts|tsx)$/.test(entry.name) && !entry.name.endsWith('.d.ts')) {
-        // apiDirs가 기본값이면 모든 *.api.ts 포함 (하위 호환)
-        // apiDirs가 커스텀이면 해당 디렉토리 패턴에 매칭되는 파일만 포함
+      else if (entry.isFile() && fileRegex.test(entry.name) && !entry.name.endsWith('.d.ts')) {
         if (apiDirs.length === 0 || matchesGlobDir(full, projectRoot, apiDirs)) {
           results.push(full);
         }
@@ -409,15 +417,19 @@ function findApiFiles(projectRoot: string, apiDirs: string[]): string[] {
     });
   }
 
-  walk(srcDir);
+  // scanDirs 설정에 따라 탐색 (기본: ['src'])
+  scanDirs.forEach((scanDir) => {
+    walk(path.join(projectRoot, scanDir));
+  });
 
-  // apiDirs 중 src/ 외부 경로가 있으면 추가 탐색
+  // apiDirs 중 scanDirs에 포함되지 않는 경로가 있으면 추가 탐색
   apiDirs.forEach((pattern) => {
-    if (!pattern.startsWith('src/') && !pattern.startsWith('src\\')) {
+    const baseSegment = pattern.split('*')[0].split('/')[0];
+    if (!scanDirs.includes(baseSegment)) {
       const baseDir = path.join(projectRoot, pattern.split('*')[0]);
       if (fs.existsSync(baseDir)) {
         walkDir(baseDir).forEach((file) => {
-          if (/\.api\.(ts|tsx)$/.test(file) && !results.includes(file)) {
+          if (fileRegex.test(path.basename(file)) && !results.includes(file)) {
             results.push(file);
           }
         });
@@ -436,23 +448,26 @@ export function scanClientApiCalls(
   config?: Required<ApiTracerConfig>
 ): ClientApiEntry[] {
   // config가 없으면 기본값 사용 (하위 호환)
-  const httpPatterns = config?.httpClient?.patterns ?? ['this.http', 'this.axios', 'apiClient', 'request'];
+  const httpPatterns = config?.httpClient?.patterns ?? ['this.http', 'this.axios', 'this.$axios', 'apiClient', 'request'];
   const apiDirs = config?.apiDirs ?? ['src/domain/**/api', 'src/shared/api', 'shared/api'];
+  const scanDirs = config?.scanDirs ?? ['src'];
+  const apiFilePattern = config?.apiFilePattern ?? '\\.api\\.(ts|tsx)$';
   const traceConfig = config?.trace ?? { enabled: true, sharedDirs: ['src/shared', 'shared'] };
   const decoratorConfig = config?.decorators ?? { label: ['Attribute', 'ApiProperty', 'ApiPropertyOptional'], required: ['IsNotEmpty', 'IsNotBlank'] };
   const aliasConfig = config?.alias ?? {};
+  const urlStripPrefix = config?.urlStripPrefix ?? [];
 
-  // 모델 해석 + 참조 추적 모두를 위해 src 전체 로드
-  preloadSourceFiles(projectRoot);
+  // 모델 해석 + 참조 추적 모두를 위해 소스 전체 로드
+  preloadSourceFiles(projectRoot, scanDirs);
   loadFilesForTracing(projectRoot, aliasConfig, traceConfig.sharedDirs ?? ['src/shared', 'shared']);
 
-  const apiFiles = findApiFiles(projectRoot, apiDirs);
+  const apiFiles = findApiFiles(projectRoot, apiDirs, scanDirs, apiFilePattern);
   if (apiFiles.length === 0) {
-    console.warn('[api-docs] *.api.ts 파일을 찾지 못했습니다.');
+    console.warn(`[api-docs] API 파일을 찾지 못했습니다. (패턴: ${apiFilePattern}, 스캔: ${scanDirs.join(', ')}, 디렉토리: ${apiDirs.join(', ')})`);
     return [];
   }
 
-  console.log(`[api-docs] *.api.ts 파일 ${apiFiles.length}개 발견`);
+  console.log(`[api-docs] API 파일 ${apiFiles.length}개 발견 (패턴: ${apiFilePattern})`);
   console.log(`[api-docs] HTTP 패턴: ${httpPatterns.join(', ')}`);
 
   const results: ClientApiEntry[] = [];
