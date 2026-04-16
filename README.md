@@ -91,7 +91,7 @@ account.api.ts
 
 ### 사전 조건
 
-- Node.js 16 이상
+- Node.js 20 이상
 - 분석 대상이 될 프론트엔드 프로젝트가 있어야 합니다
 
 ### Step 1 — 여러분의 프로젝트에 설치
@@ -291,18 +291,32 @@ export default defineConfig({
   framework: 'nextjs-pages',
   output: 'docs/api.html',
 
-  // API 파일 디렉토리 (glob 패턴)
+  // ── 스캔 대상 설정 ──
+
+  // 스캔할 디렉토리 (기본: ['src'])
+  // src/ 외에 API 호출이 있는 디렉토리를 추가합니다
+  scanDirs: ['src'],
+
+  // API 파일 이름 패턴 (정규식, 기본: '\.api\.(ts|tsx)$')
+  // 프로젝트 컨벤션에 맞게 변경할 수 있습니다
+  apiFilePattern: '\\.api\\.(ts|tsx)$',
+
+  // API 파일 디렉토리 필터 (glob 패턴)
   apiDirs: [
     'src/domain/**/api',
     'src/shared/api',
   ],
 
-  // HTTP 클라이언트 호출 패턴
+  // ── HTTP 호출 감지 ──
+
   // 여러분의 프로젝트에서 사용하는 HTTP 클라이언트 패턴을 지정합니다
+  // 체인 패턴도 지원: 'this.store.$axios' → this.store.$axios.get(...) 감지
   httpClient: {
     patterns: ['this.http', 'this.axios', 'apiClient'],
     methods: ['get', 'post', 'put', 'patch', 'delete'],
   },
+
+  // ── 기타 설정 ──
 
   // path alias (tsconfig.json에서 자동 읽기, 추가 필요시 지정)
   alias: {
@@ -431,13 +445,70 @@ npx fe-api-tracer
 # → 서버 라우트 스캔 스킵, 클라이언트 호출만 스캔
 ```
 
+### Nuxt 2 / Vuex + Axios 프로젝트
+
+`*.api.ts` 파일 대신 Vuex 액션 파일에서 `$axios`를 사용하는 프로젝트입니다.
+
+```
+my-nuxt2-app/
+├── package.json
+├── nuxt.config.ts
+├── fe-api-tracer.config.ts     ← 커스텀 설정 필요
+├── src/
+│   └── app/
+│       ├── account/
+│       └── shared/
+├── store/
+│   ├── account/
+│   │   └── client/
+│   │       └── account-client.action.ts  ← this.store.$axios.get(...) 감지
+│   ├── payment/
+│   │   └── client/
+│   │       └── payment-client.action.ts
+│   └── index.ts
+└── docs/
+    └── api.html
+```
+
+```typescript
+// fe-api-tracer.config.ts
+import { defineConfig } from 'fe-api-tracer';
+
+export default defineConfig({
+  framework: 'vue',           // Nuxt 2는 서버 라우트 없으므로 vue 사용
+  output: 'docs/api.html',
+
+  scanDirs: ['src', 'store'], // store/ 디렉토리도 스캔
+  apiFilePattern: '\\.action\\.(ts|tsx)$',  // *.action.ts 파일을 API 파일로 인식
+  apiDirs: ['store/**/client'],             // store 하위 client 디렉토리 필터
+
+  httpClient: {
+    patterns: ['this.store.$axios', '$axios'],  // Vuex + Axios 패턴
+  },
+
+  trace: {
+    enabled: true,
+    sharedDirs: ['src/app/shared', 'src/core'],
+  },
+});
+```
+
+```bash
+cd my-nuxt2-app
+npm install -D fe-api-tracer
+npx fe-api-tracer
+# → store/**/client/*.action.ts에서 this.store.$axios 호출 감지
+```
+
+> `${process.env.VUE_APP_API_URL}/api/users` 형태의 URL에서 환경변수 접두사는 자동으로 제거됩니다.
+
 ---
 
 ## 감지하는 HTTP 호출 패턴
 
 `fe-api-tracer`는 다음 패턴들을 자동으로 감지합니다.
 
-**클래스 기반 HTTP 클라이언트** (기본 패턴: `this.http`, `this.axios`, `apiClient`, `request`)
+**클래스 기반 HTTP 클라이언트** (기본 패턴: `this.http`, `this.axios`, `this.$axios`, `apiClient`, `request`)
 
 ```typescript
 // 모두 감지됨
@@ -445,7 +516,12 @@ this.http.get('/api/users');
 this.http.post('/api/users', params);
 this.axios.put(`/api/users/${id}`, data);
 apiClient.delete('/api/users/1');
+
+// 체인 패턴도 감지 (Vuex 등)
+this.store.$axios.get('/api/users');        // 패턴: 'this.store.$axios' 또는 '$axios'
 ```
+
+> URL의 `${process.env.XXX}` 접두사는 자동으로 제거됩니다. 예: `` `${process.env.VUE_APP_API_URL}/api/users` `` → `/api/users`
 
 **fetch / $fetch 직접 호출**
 
