@@ -101,11 +101,25 @@ account.api.ts
 # 여러분의 프로젝트 디렉토리로 이동
 cd ~/projects/my-frontend-app
 
-# devDependency로 설치
+# 방법 A — npm에 퍼블리시된 경우
 npm install -D fe-api-tracer
+
+# 방법 B — 로컬 경로로 설치 (npm 미퍼블리시 시)
+npm install -D ../fe-api-tracer            # 상대 경로
+npm install -D /home/user/tools/fe-api-tracer  # 절대 경로
 ```
 
-설치 후 `my-frontend-app/node_modules/fe-api-tracer/`에 도구가 들어갑니다. 여러분의 `package.json`에는 `devDependencies`에 한 줄이 추가될 뿐입니다.
+로컬 경로로 설치하면 `package.json`에 다음과 같이 기록됩니다:
+
+```json
+{
+  "devDependencies": {
+    "fe-api-tracer": "file:../fe-api-tracer"
+  }
+}
+```
+
+> `npm link`를 사용할 수도 있습니다. `fe-api-tracer/` 디렉토리에서 `npm link`를 실행한 후, 여러분의 프로젝트에서 `npm link fe-api-tracer`를 실행하면 심볼릭 링크로 연결됩니다. 도구 소스를 수정하면서 바로 테스트하고 싶을 때 유용합니다.
 
 ### Step 2 — 여러분의 package.json에 스크립트 등록
 
@@ -121,12 +135,12 @@ npm install -D fe-api-tracer
     "postbuild": "fe-api-tracer"
   },
   "devDependencies": {
-    "fe-api-tracer": "^1.0.0"
+    "fe-api-tracer": "file:../fe-api-tracer"
   }
 }
 ```
 
-> `fe-api-tracer`의 자체 `package.json`과 혼동하지 마세요. 위는 **여러분의 프로젝트** `package.json`입니다.
+> `fe-api-tracer`의 자체 `package.json`과 혼동하지 마세요. 위는 **여러분의 프로젝트** `package.json`입니다. `devDependencies` 값이 `"file:../fe-api-tracer"`이면 로컬 설치, `"^1.0.0"` 같은 버전이면 npm 레지스트리 설치입니다.
 
 ### Step 3 — 실행
 
