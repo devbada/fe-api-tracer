@@ -36,14 +36,15 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "vitest": "^1.0.0",
-    "@types/node": "^18.0.0"
+    "@types/node": "^18.0.0",
+    "vitest": "^1.0.0"
   },
   "dependencies": {
+    "@rollup/rollup-linux-arm64-gnu": "^4.60.1",
+    "dotenv": "^16.0.0",
     "ts-morph": "^20.0.0",
     "ts-node": "^10.9.0",
-    "typescript": "^5.0.0",
-    "dotenv": "^16.0.0"
+    "typescript": "^5.0.0"
   },
   "engines": {
     "node": ">=16.0.0"

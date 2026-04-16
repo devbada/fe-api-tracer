@@ -124,7 +124,8 @@ describe('client-api-scanner', () => {
   });
 
   it('그룹이 URL의 첫 번째 세그먼트로 설정되어야 한다', () => {
-    writeFile('src/domain/api/group.api.ts', `
+    // apiDirs 기본 패턴 'src/domain/**/api'에 매칭되도록 경로 설정
+    writeFile('src/domain/user/api/group.api.ts', `
       class GroupApi {
         constructor(private http: any) {}
         getUsers() { return this.http.get('/api/users/list'); }

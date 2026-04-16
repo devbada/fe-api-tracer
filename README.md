@@ -93,7 +93,28 @@ account.api.ts
 - Node.js 16 이상
 - 분석 대상이 될 프론트엔드 프로젝트가 있어야 합니다
 
-### Step 1 — 여러분의 프로젝트에 설치
+### Step 1 — fe-api-tracer 준비 (최초 1회)
+
+npm에 퍼블리시된 패키지를 사용한다면 이 단계는 건너뛰세요. Git에서 직접 클론한 경우에만 필요합니다.
+
+```bash
+# 1. 소스 받기
+git clone https://github.com/your-org/fe-api-tracer.git
+cd fe-api-tracer
+
+# 2. 의존성 설치
+npm install
+
+# 3. 빌드 (TypeScript → JavaScript 컴파일)
+npm run build
+
+# 4. dist/ 디렉토리가 생성되었는지 확인
+ls dist/scripts/generate-api-docs.js
+```
+
+> `npm install` 시 `prepare` 훅이 자동으로 `tsc`를 실행하므로, 보통은 `npm install`만으로 빌드까지 완료됩니다. 만약 빌드가 실패했다면 `npm run build`를 직접 실행해 주세요.
+
+### Step 2 — 여러분의 프로젝트에 설치
 
 여러분의 프론트엔드 프로젝트 디렉토리에서 실행합니다.
 
@@ -121,7 +142,7 @@ npm install -D /home/user/tools/fe-api-tracer  # 절대 경로
 
 > `npm link`를 사용할 수도 있습니다. `fe-api-tracer/` 디렉토리에서 `npm link`를 실행한 후, 여러분의 프로젝트에서 `npm link fe-api-tracer`를 실행하면 심볼릭 링크로 연결됩니다. 도구 소스를 수정하면서 바로 테스트하고 싶을 때 유용합니다.
 
-### Step 2 — 여러분의 package.json에 스크립트 등록
+### Step 3 — 여러분의 package.json에 스크립트 등록
 
 ```jsonc
 // my-frontend-app/package.json  ← 여러분의 프로젝트 설정
@@ -142,7 +163,7 @@ npm install -D /home/user/tools/fe-api-tracer  # 절대 경로
 
 > `fe-api-tracer`의 자체 `package.json`과 혼동하지 마세요. 위는 **여러분의 프로젝트** `package.json`입니다. `devDependencies` 값이 `"file:../fe-api-tracer"`이면 로컬 설치, `"^1.0.0"` 같은 버전이면 npm 레지스트리 설치입니다.
 
-### Step 3 — 실행
+### Step 4 — 실행
 
 ```bash
 # 여러분의 프로젝트 루트에서 실행

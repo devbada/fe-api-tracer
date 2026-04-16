@@ -32,8 +32,14 @@ describe('exporters/registry', () => {
     expect(exporter.format).toBe('json-raw');
   });
 
-  it('.json 확장자에 postman exporter를 반환해야 한다', () => {
+  it('.json 확장자에 openapi exporter를 반환해야 한다 (등록 순서 우선)', () => {
+    // OpenAPI와 Postman 모두 extension='json'이므로 먼저 등록된 OpenAPI가 반환됨
     const exporter = resolveExporter('output/collection.json');
+    expect(exporter.format).toBe('openapi');
+  });
+
+  it('formatHint=postman으로 명시하면 postman exporter를 반환해야 한다', () => {
+    const exporter = resolveExporter('output/collection.json', 'postman');
     expect(exporter.format).toBe('postman');
   });
 

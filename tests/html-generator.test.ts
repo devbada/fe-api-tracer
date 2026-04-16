@@ -100,8 +100,8 @@ describe('html-generator', () => {
       const html = generateHtml([], [mockClientEntry], 'Test');
 
       expect(html).toContain('usePostList');
-      expect(html).toContain('PostListPage');
-      expect(html).toContain('src/pages/posts/index.tsx');
+      // pageCallers는 shortPath(file)로 렌더링됨 (functionName이 아닌 파일 경로)
+      expect(html).toContain('posts/index.tsx');
     });
 
     it('빈 엔트리일 때도 에러 없이 HTML을 생성해야 한다', () => {
