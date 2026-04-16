@@ -25,6 +25,19 @@ let aliasConfig: Record<string, string> = {};
 let sharedDirsConfig: string[] = ['src/shared', 'shared'];
 
 // ─────────────────────────────────────────────
+// Vuex dispatch 인덱스
+// key: "모듈경로/액션명" (예: "account/client/getAccountEmail")
+// value: 해당 dispatch를 호출하는 .vue 파일 절대경로 목록
+// ─────────────────────────────────────────────
+type VuexDispatchIndex = Map<string, string[]>;
+let vuexDispatchIndex: VuexDispatchIndex | null = null;
+
+// key: store 파일 절대경로 → 해당 파일이 속한 Vuex 모듈 경로
+// 예: "/project/store/account/client/account-client.action.ts" → "account/client"
+type StoreModuleMap = Map<string, string>;
+let storeModuleMap: StoreModuleMap | null = null;
+
+// ─────────────────────────────────────────────
 // import 경로 resolve (config.alias 기반)
 // ─────────────────────────────────────────────
 function resolveAlias(importPath: string, fromDir: string, projectRoot: string): string | null {
@@ -95,6 +108,123 @@ function extractImports(content: string, fromFile: string, projectRoot: string):
 }
 
 // ─────────────────────────────────────────────
+// .vue 파일에서 <script> 블록 추출
+// ─────────────────────────────────────────────
+function extractVueScript(content: string): string {
+  // <script lang="ts"> ... </script> 또는 <script> ... </script>
+  const match = content.match(/<script[^>]*>([\s\S]*?)<\/script>/);
+  return match ? match[1] : '';
+}
+
+// ─────────────────────────────────────────────
+// Vuex dispatch 패턴 추출
+// this.$store.dispatch('account/client/getAccountEmail', ...)
+// this.$store.dispatch('account/client/getAccountEmail')
+// dispatch('module/action')
+// ─────────────────────────────────────────────
+function extractVuexDispatches(content: string): string[] {
+  const results: string[] = [];
+  // $store.dispatch('...') 또는 dispatch('...')
+  const pattern = /(?:\$store\.)?dispatch\s*\(\s*['"]([^'"]+)['"]/g;
+  let m: RegExpExecArray | null;
+  while ((m = pattern.exec(content)) !== null) {
+    results.push(m[1]); // 예: "account/client/getAccountEmail"
+  }
+  return results;
+}
+
+// ─────────────────────────────────────────────
+// Vuex getter 패턴 추출
+// this.$store.getters['account/client/getAccount']
+// ─────────────────────────────────────────────
+function extractVuexGetters(content: string): string[] {
+  const results: string[] = [];
+  const pattern = /\$store\.getters\s*\[\s*['"]([^'"]+)['"]\s*\]/g;
+  let m: RegExpExecArray | null;
+  while ((m = pattern.exec(content)) !== null) {
+    results.push(m[1]);
+  }
+  return results;
+}
+
+// ─────────────────────────────────────────────
+// store 디렉토리 구조에서 모듈 맵 빌드
+// store/account/client/*.action.ts → "account/client"
+// ─────────────────────────────────────────────
+function buildStoreModuleMap(projectRoot: string): void {
+  storeModuleMap = new Map();
+  const storeDir = path.join(projectRoot, 'store');
+  if (!fs.existsSync(storeDir)) return;
+
+  function walk(dir: string): void {
+    fs.readdirSync(dir, { withFileTypes: true }).forEach((entry) => {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (entry.isFile() && /\.(ts|tsx|js)$/.test(entry.name) && !entry.name.endsWith('.d.ts')) {
+        // store/account/client/xxx.ts → "account/client"
+        const relFromStore = path.relative(storeDir, path.dirname(full)).replace(/\\/g, '/');
+        storeModuleMap!.set(full, relFromStore || '');
+      }
+    });
+  }
+
+  walk(storeDir);
+  console.log(`[api-docs] Store 모듈 맵: ${storeModuleMap.size}개 파일`);
+}
+
+// ─────────────────────────────────────────────
+// Vuex dispatch 인덱스 빌드 (.vue 파일 스캔)
+// ─────────────────────────────────────────────
+function buildVuexDispatchIndex(projectRoot: string): void {
+  vuexDispatchIndex = new Map();
+  buildStoreModuleMap(projectRoot);
+
+  const SKIP_DIRS = new Set(['node_modules', '.nuxt', 'dist', '.git', 'out', 'build']);
+  const vueFiles: string[] = [];
+
+  function walk(dir: string): void {
+    if (!fs.existsSync(dir)) return;
+    fs.readdirSync(dir, { withFileTypes: true }).forEach((entry) => {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (!SKIP_DIRS.has(entry.name)) walk(full);
+      } else if (entry.isFile() && /\.(vue|ts|tsx)$/.test(entry.name)) {
+        vueFiles.push(full);
+      }
+    });
+  }
+
+  // src/, pages/, layouts/ 등 일반적인 Nuxt/Vue 디렉토리 스캔
+  ['src', 'pages', 'layouts', 'components'].forEach((dir) => {
+    walk(path.join(projectRoot, dir));
+  });
+  // src 내부의 하위 디렉토리도 이미 포함됨
+
+  vueFiles.forEach((filePath) => {
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const scriptContent = filePath.endsWith('.vue') ? extractVueScript(content) : content;
+      if (!scriptContent) return;
+
+      const dispatches = extractVuexDispatches(scriptContent);
+      const getters = extractVuexGetters(scriptContent);
+
+      [...dispatches, ...getters].forEach((actionPath) => {
+        if (!vuexDispatchIndex!.has(actionPath)) {
+          vuexDispatchIndex!.set(actionPath, []);
+        }
+        if (!vuexDispatchIndex!.get(actionPath)!.includes(filePath)) {
+          vuexDispatchIndex!.get(actionPath)!.push(filePath);
+        }
+      });
+    } catch { /* skip */ }
+  });
+
+  console.log(`[api-docs] Vuex dispatch 인덱스: ${vuexDispatchIndex.size}개 액션 패턴 (${vueFiles.length}개 파일 스캔)`);
+}
+
+// ─────────────────────────────────────────────
 // import 역방향 인덱스 빌드
 // ─────────────────────────────────────────────
 export function buildCallIndex(projectRoot: string): void {
@@ -104,7 +234,7 @@ export function buildCallIndex(projectRoot: string): void {
   importIndex = new Map();
   projectRootCache = projectRoot;
 
-  const SKIP_DIRS = new Set(['node_modules', '.next', 'dist', '.git', 'out', 'build']);
+  const SKIP_DIRS = new Set(['node_modules', '.next', '.nuxt', 'dist', '.git', 'out', 'build']);
   const allFiles: string[] = [];
 
   function walk(dir: string): void {
@@ -113,7 +243,7 @@ export function buildCallIndex(projectRoot: string): void {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         if (!SKIP_DIRS.has(entry.name)) walk(full);
-      } else if (entry.isFile() && /\.(ts|tsx)$/.test(entry.name) && !entry.name.endsWith('.d.ts')) {
+      } else if (entry.isFile() && /\.(ts|tsx|vue)$/.test(entry.name) && !entry.name.endsWith('.d.ts')) {
         allFiles.push(full);
       }
     });
@@ -121,11 +251,19 @@ export function buildCallIndex(projectRoot: string): void {
 
   walk(path.join(projectRoot, 'src'));
   walk(path.join(projectRoot, 'pages'));
+  walk(path.join(projectRoot, 'store'));
+  walk(path.join(projectRoot, 'layouts'));
+  walk(path.join(projectRoot, 'components'));
 
   let processed = 0;
   allFiles.forEach((filePath) => {
     try {
-      const content = fs.readFileSync(filePath, 'utf-8');
+      let content = fs.readFileSync(filePath, 'utf-8');
+      // .vue 파일은 <script> 블록만 추출
+      if (filePath.endsWith('.vue')) {
+        content = extractVueScript(content);
+        if (!content) return;
+      }
       const imports = extractImports(content, filePath, projectRoot);
       imports.forEach((imported) => {
         if (!importIndex!.has(imported)) importIndex!.set(imported, []);
@@ -136,14 +274,28 @@ export function buildCallIndex(projectRoot: string): void {
     } catch { /* skip */ }
   });
 
+  // Vuex dispatch 인덱스도 함께 빌드
+  buildVuexDispatchIndex(projectRoot);
+
   console.log(`[api-docs] 인덱스 완료: ${allFiles.length}개 파일`);
 }
 
 // ─────────────────────────────────────────────
 // 페이지 파일 여부 (config.trace.pagePattern 반영)
+// .vue 파일 + Nuxt/Vue 페이지 패턴 지원
 // ─────────────────────────────────────────────
 function isPage(filePath: string, projectRoot: string): boolean {
   const rel = path.relative(projectRoot, filePath).replace(/\\/g, '/');
+
+  // Nuxt/Vue: pages/ 디렉토리 내 .vue 파일
+  if (/\.vue$/.test(filePath)) {
+    return (
+      (rel.includes('src/pages/') || rel.startsWith('pages/') || /(?:^|\/)pages\/(?!api\/)/.test(rel)) &&
+      !rel.includes('_') // _layout.vue, _error.vue 등 제외 (Nuxt 2 convention)
+    );
+  }
+
+  // Next.js/React: .tsx 파일
   return (
     /\.(tsx)$/.test(filePath) &&
     (rel.includes('src/pages/') || /(?:^|\/)pages\/(?!api\/)/.test(rel)) &&
@@ -181,9 +333,52 @@ function callsMethod(filePath: string, methodName: string): boolean {
 }
 
 // ─────────────────────────────────────────────
-// 핵심 추적 로직 (단순 2단계)
+// Vuex dispatch 경로에서 store 파일의 메서드와 매핑
+// dispatch('account/client/getAccountEmail')
+//   → modulePath: "account/client", actionName: "getAccountEmail"
+//   → store/account/client/*.action.ts 의 getAccountEmail 메서드
+// ─────────────────────────────────────────────
+function findVuexDispatchCallers(
+  apiFunction: string,
+  apiFilePath: string,
+  projectRoot: string
+): string[] {
+  if (!vuexDispatchIndex || !storeModuleMap) return [];
+
+  // apiFilePath가 속한 Vuex 모듈 경로 확인
+  const modulePath = storeModuleMap.get(apiFilePath);
+  if (modulePath === undefined) return [];
+
+  // dispatch 문자열: "모듈경로/메서드명" (예: "account/client/getAccountEmail")
+  const dispatchKey = modulePath ? `${modulePath}/${apiFunction}` : apiFunction;
+  const callers = vuexDispatchIndex.get(dispatchKey) ?? [];
+
+  // getter 패턴도 확인 (같은 키 구조)
+  // 또한, 중첩 모듈의 경우 다양한 경로 형태를 시도
+  // 예: dispatch 시 네임스페이스가 다를 수 있음
+  const allCallers = [...callers];
+
+  // 부분 매칭: dispatch 키의 끝 부분이 apiFunction과 일치하는 경우도 포함
+  vuexDispatchIndex.forEach((files, key) => {
+    // key 끝부분이 /apiFunction 인 경우 (이미 정확 매칭은 위에서 처리)
+    if (key !== dispatchKey && key.endsWith('/' + apiFunction)) {
+      // modulePath가 key에 포함되어 있는지 확인 (관련성 검증)
+      if (modulePath && key.includes(modulePath)) {
+        files.forEach((f) => {
+          if (!allCallers.includes(f)) allCallers.push(f);
+        });
+      }
+    }
+  });
+
+  return allCallers;
+}
+
+// ─────────────────────────────────────────────
+// 핵심 추적 로직 (단순 2단계 + Vuex dispatch)
 // 1단계: api 파일을 import하고, 해당 메서드를 호출하는 query 파일 찾기
 // 2단계: 그 query 파일을 직접 import하는 파일 찾기 (1hop)
+// 3단계: Vuex dispatch로 해당 메서드를 호출하는 .vue 파일 찾기
 // ─────────────────────────────────────────────
 export function traceApiUsage(
   apiFunction: string,
@@ -228,6 +423,25 @@ export function traceApiUsage(
     });
   });
 
+  // 3단계: Vuex dispatch 기반 caller 추가
+  // store action 파일에서 HTTP 호출 → dispatch로 해당 action을 호출하는 .vue 파일 연결
+  const vuexCallerFiles = findVuexDispatchCallers(apiFunction, apiFilePath, projectRoot);
+  vuexCallerFiles.forEach((filePath) => {
+    const rel = path.relative(projectRoot, filePath).replace(/\\/g, '/');
+    if (seen.has(rel)) return;
+    seen.add(rel);
+    const name = path.basename(filePath, path.extname(filePath));
+    pageCallers.push({ file: rel, functionName: name, isPage: isPage(filePath, projectRoot) });
+  });
+
+  // directCallers가 없지만 Vuex dispatch로 연결된 경우,
+  // store action 파일 자체를 directCaller로 추가 (시각적 연결 표시)
+  if (directCallers.length === 0 && vuexCallerFiles.length > 0 && storeModuleMap?.has(apiFilePath)) {
+    const rel = path.relative(projectRoot, apiFilePath).replace(/\\/g, '/');
+    const name = path.basename(apiFilePath, path.extname(apiFilePath));
+    directCallers.push({ file: rel, functionName: name, isPage: false });
+  }
+
   return { apiFunction, directCallers, pageCallers };
 }
 
@@ -245,5 +459,17 @@ export function loadFilesForTracing(
 
   // import 인덱스 강제 리빌드 (config 변경 반영)
   importIndex = null;
+  vuexDispatchIndex = null;
+  storeModuleMap = null;
   buildCallIndex(projectRoot);
+}
+
+// ─────────────────────────────────────────────
+// Vuex dispatch 인덱스 통계 (디버그용)
+// ─────────────────────────────────────────────
+export function getVuexDispatchStats(): { actionCount: number; fileCount: number } {
+  if (!vuexDispatchIndex) return { actionCount: 0, fileCount: 0 };
+  const allFiles = new Set<string>();
+  vuexDispatchIndex.forEach((files) => files.forEach((f) => allFiles.add(f)));
+  return { actionCount: vuexDispatchIndex.size, fileCount: allFiles.size };
 }

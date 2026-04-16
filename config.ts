@@ -4,12 +4,23 @@ import * as dotenv from 'dotenv';
 
 export type Framework = 'nextjs-pages' | 'nextjs-app' | 'nuxt' | 'vue' | 'react' | 'auto';
 
+export interface VuexConfig {
+  /** Vuex dispatch 기반 사용처 추적 활성화 (기본: true, store/ 디렉토리 존재 시 자동 감지) */
+  enabled?: boolean;
+  /** store 디렉토리 경로 (기본: 'store') */
+  storeDir?: string;
+  /** dispatch 패턴 정규식 (기본: $store.dispatch / dispatch 자동 감지) */
+  dispatchPattern?: string;
+}
+
 export interface TraceConfig {
   enabled?: boolean;
   exclude?: string[];
   sharedDirs?: string[];
   queryPattern?: RegExp;
   pagePattern?: RegExp;
+  /** Vuex store dispatch 기반 추적 설정 */
+  vuex?: VuexConfig;
 }
 
 export interface HttpClientConfig {
@@ -65,6 +76,10 @@ const DEFAULTS: Required<ApiTracerConfig> = {
     sharedDirs: ['src/shared', 'shared'],
     queryPattern: /\.query\.(ts|tsx)$/,
     pagePattern: /src\/pages\/|(?:^|\/)pages\/(?!api\/)/,
+    vuex: {
+      enabled: true,
+      storeDir: 'store',
+    },
   },
   decorators: {
     label: ['Attribute', 'ApiProperty', 'ApiPropertyOptional'],
@@ -243,6 +258,11 @@ export function loadConfig(projectRoot: string, preset?: string): Required<ApiTr
       ...DEFAULTS.trace,
       ...fileConfig.trace,
       ...envConfig.trace,
+      vuex: {
+        ...DEFAULTS.trace.vuex,
+        ...fileConfig.trace?.vuex,
+        ...envConfig.trace?.vuex,
+      },
     },
     decorators: {
       ...DEFAULTS.decorators,
