@@ -164,7 +164,7 @@ function processFile(sourceFile: SourceFile, dryRun: boolean): ScaffoldResult | 
 
       functions.push(name);
       if (!dryRun) {
-        stmt.insertText(stmt.getStart(), jsdoc + '\n');
+        (stmt as any).replaceWithText(jsdoc + '\n' + stmt.getText());
         modified = true;
       }
       insertions++;

@@ -74,7 +74,7 @@ async function runBuild(cliArgs: CliArgs): Promise<void> {
 
   // CLI 인자로 config 오버라이드
   if (cliArgs.output) config.output = cliArgs.output;
-  if (cliArgs.framework) config.framework = cliArgs.framework as ApiTracerConfig['framework'];
+  if (cliArgs.framework) (config as any).framework = cliArgs.framework;
 
   // framework 자동 감지
   if (config.framework === 'auto') {

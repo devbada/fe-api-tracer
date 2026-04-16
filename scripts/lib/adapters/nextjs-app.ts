@@ -8,7 +8,7 @@ const ALLOWED_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'];
 
 /**
  * Next.js App Router 어댑터
- * app/**/route.ts 파일을 스캔하여 서버 라우트를 추출합니다.
+ * app/(재귀)/route.ts 파일을 스캔하여 서버 라우트를 추출합니다.
  */
 export class NextjsAppAdapter implements FrameworkAdapter {
   name = 'nextjs-app';

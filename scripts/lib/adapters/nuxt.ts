@@ -25,7 +25,7 @@ const project = new Project({
 
 /**
  * Nuxt 3 어댑터
- * server/api/**/*.ts 파일을 스캔하여 서버 라우트를 추출합니다.
+ * server/api/(재귀).ts 파일을 스캔하여 서버 라우트를 추출합니다.
  */
 export class NuxtAdapter implements FrameworkAdapter {
   name = 'nuxt';

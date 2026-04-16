@@ -11,6 +11,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "prepare": "tsc",
     "generate": "ts-node scripts/generate-api-docs.ts",
     "generate:watch": "ts-node scripts/generate-api-docs.ts --watch",
     "scaffold": "ts-node scripts/scaffold-jsdoc.ts",
@@ -18,8 +19,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "lint": "tsc --noEmit"
   },
   "keywords": [
     "api",
@@ -36,13 +36,13 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "typescript": "^5.0.0",
-    "ts-node": "^10.9.0",
     "vitest": "^1.0.0",
     "@types/node": "^18.0.0"
   },
   "dependencies": {
     "ts-morph": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0",
     "dotenv": "^16.0.0"
   },
   "engines": {
@@ -51,6 +51,7 @@
   "files": [
     "dist/",
     "bin/",
+    "scripts/",
     "config.ts",
     "README.md"
   ]
