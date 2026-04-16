@@ -132,6 +132,26 @@ function loadEnvConfig(projectRoot: string): Partial<ApiTracerConfig> {
 // ─────────────────────────────────────────────
 // fe-api-tracer.config.ts 로드
 // ─────────────────────────────────────────────
+function loadTsConfig(filePath: string): any {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  // import → require 변환, export default → module.exports 변환
+  const transformed = content
+    .replace(/import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]\s*;?/g, 'const {$1} = require("$2");')
+    .replace(/import\s+(\w+)\s+from\s+['"]([^'"]+)['"]\s*;?/g, 'const $1 = require("$2");')
+    .replace(/export\s+default\s+/, 'module.exports = ');
+
+  // 임시 .js 파일로 저장 후 require
+  const tmpPath = filePath.replace(/\.ts$/, '.tmp.js');
+  fs.writeFileSync(tmpPath, transformed, 'utf-8');
+  try {
+    // require 캐시 제거 (재실행 시 최신 반영)
+    delete require.cache[require.resolve(tmpPath)];
+    return require(tmpPath);
+  } finally {
+    try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
+  }
+}
+
 function loadFileConfig(projectRoot: string, preset?: string): Partial<ApiTracerConfig> {
   const candidates = [
     path.join(projectRoot, 'fe-api-tracer.config.ts'),
@@ -142,8 +162,8 @@ function loadFileConfig(projectRoot: string, preset?: string): Partial<ApiTracer
     if (!fs.existsSync(candidate)) continue;
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const mod = require(candidate);
+      // .ts 파일은 import 문 변환 후 로드, .js는 직접 require
+      const mod = candidate.endsWith('.ts') ? loadTsConfig(candidate) : require(candidate);
       const raw = mod.default ?? mod;
 
       // 프리셋 지원
