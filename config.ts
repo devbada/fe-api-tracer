@@ -1,0 +1,227 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import * as dotenv from 'dotenv';
+
+export type Framework = 'nextjs-pages' | 'nextjs-app' | 'nuxt' | 'vue' | 'react' | 'auto';
+
+export interface TraceConfig {
+  enabled?: boolean;
+  exclude?: string[];
+  sharedDirs?: string[];
+  queryPattern?: RegExp;
+  pagePattern?: RegExp;
+}
+
+export interface HttpClientConfig {
+  patterns?: string[];
+  methods?: string[];
+}
+
+export interface DecoratorConfig {
+  label?: string[];
+  required?: string[];
+}
+
+export interface ApiTracerConfig {
+  framework?: Framework;
+  root?: string;
+  output?: string;
+  apiDirs?: string[];
+  alias?: Record<string, string>;
+  httpClient?: HttpClientConfig;
+  trace?: TraceConfig;
+  decorators?: DecoratorConfig;
+}
+
+export interface ApiTracerConfigWithPresets {
+  presets?: Record<string, ApiTracerConfig>;
+}
+
+// ─────────────────────────────────────────────
+// 기본값
+// ─────────────────────────────────────────────
+const DEFAULTS: Required<ApiTracerConfig> = {
+  framework: 'auto',
+  root: process.cwd(),
+  output: 'docs/api.html',
+  apiDirs: ['src/domain/**/api', 'src/shared/api', 'shared/api'],
+  alias: {},
+  httpClient: {
+    patterns: ['this.http', 'this.axios', 'apiClient', 'request'],
+    methods: ['get', 'post', 'put', 'patch', 'delete'],
+  },
+  trace: {
+    enabled: true,
+    exclude: ['Container', 'Mapper', 'Injectable', 'singleton'],
+    sharedDirs: ['src/shared', 'shared'],
+    queryPattern: /\.query\.(ts|tsx)$/,
+    pagePattern: /src\/pages\/|(?:^|\/)pages\/(?!api\/)/,
+  },
+  decorators: {
+    label: ['Attribute', 'ApiProperty', 'ApiPropertyOptional'],
+    required: ['IsNotEmpty', 'IsNotBlank'],
+  },
+};
+
+// ─────────────────────────────────────────────
+// .env 파일 파싱
+// ─────────────────────────────────────────────
+function loadEnvConfig(projectRoot: string): Partial<ApiTracerConfig> {
+  const envFiles = [
+    path.join(projectRoot, '.env.api-tracer'),
+    path.join(projectRoot, '.env.local'),
+    path.join(projectRoot, '.env'),
+  ];
+
+  for (const envFile of envFiles) {
+    if (fs.existsSync(envFile)) {
+      dotenv.config({ path: envFile });
+      break;
+    }
+  }
+
+  const config: Partial<ApiTracerConfig> = {};
+
+  if (process.env.FE_API_TRACER_OUTPUT) {
+    config.output = process.env.FE_API_TRACER_OUTPUT;
+  }
+  if (process.env.FE_API_TRACER_FRAMEWORK) {
+    config.framework = process.env.FE_API_TRACER_FRAMEWORK as Framework;
+  }
+  if (process.env.FE_API_TRACER_API_DIRS) {
+    config.apiDirs = process.env.FE_API_TRACER_API_DIRS.split(',').map((s) => s.trim());
+  }
+  if (process.env.FE_API_TRACER_HTTP_PATTERNS) {
+    config.httpClient = {
+      ...config.httpClient,
+      patterns: process.env.FE_API_TRACER_HTTP_PATTERNS.split(',').map((s) => s.trim()),
+    };
+  }
+  if (process.env.FE_API_TRACER_ALIAS) {
+    try {
+      config.alias = JSON.parse(process.env.FE_API_TRACER_ALIAS);
+    } catch {
+      console.warn('[api-tracer] FE_API_TRACER_ALIAS JSON 파싱 실패, 무시합니다.');
+    }
+  }
+  if (process.env.FE_API_TRACER_TRACE_EXCLUDE) {
+    config.trace = {
+      ...config.trace,
+      exclude: process.env.FE_API_TRACER_TRACE_EXCLUDE.split(',').map((s) => s.trim()),
+    };
+  }
+  if (process.env.FE_API_TRACER_SHARED_DIRS) {
+    config.trace = {
+      ...config.trace,
+      sharedDirs: process.env.FE_API_TRACER_SHARED_DIRS.split(',').map((s) => s.trim()),
+    };
+  }
+
+  return config;
+}
+
+// ─────────────────────────────────────────────
+// fe-api-tracer.config.ts 로드
+// ─────────────────────────────────────────────
+function loadFileConfig(projectRoot: string, preset?: string): Partial<ApiTracerConfig> {
+  const candidates = [
+    path.join(projectRoot, 'fe-api-tracer.config.ts'),
+    path.join(projectRoot, 'fe-api-tracer.config.js'),
+  ];
+
+  for (const candidate of candidates) {
+    if (!fs.existsSync(candidate)) continue;
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const mod = require(candidate);
+      const raw = mod.default ?? mod;
+
+      // 프리셋 지원
+      if (raw.presets && preset) {
+        const presetConfig = raw.presets[preset] ?? raw.presets['default'] ?? {};
+        console.log(`[api-tracer] 프리셋 적용: ${preset}`);
+        return presetConfig;
+      }
+
+      if (raw.presets) {
+        return raw.presets['default'] ?? {};
+      }
+
+      return raw as Partial<ApiTracerConfig>;
+    } catch (err) {
+      console.warn(`[api-tracer] 설정 파일 로드 실패: ${candidate}`, (err as Error).message);
+    }
+  }
+
+  return {};
+}
+
+// ─────────────────────────────────────────────
+// tsconfig.json에서 path alias 자동 읽기
+// ─────────────────────────────────────────────
+function loadTsconfigAlias(projectRoot: string): Record<string, string> {
+  const tsconfigPath = path.join(projectRoot, 'tsconfig.json');
+  if (!fs.existsSync(tsconfigPath)) return {};
+
+  try {
+    const tsconfig = JSON.parse(fs.readFileSync(tsconfigPath, 'utf-8'));
+    const paths: Record<string, string[]> = tsconfig.compilerOptions?.paths ?? {};
+    const alias: Record<string, string> = {};
+
+    Object.entries(paths).forEach(([key, values]) => {
+      if (values.length === 0) return;
+      // "@/*": ["./src/*"] → "@/": "./src/"
+      const aliasKey = key.replace(/\/\*$/, '/');
+      const aliasValue = values[0].replace(/\/\*$/, '/');
+      alias[aliasKey] = aliasValue;
+    });
+
+    return alias;
+  } catch {
+    return {};
+  }
+}
+
+// ─────────────────────────────────────────────
+// 설정 병합 (우선순위: CLI > .env > config 파일 > tsconfig alias > 기본값)
+// ─────────────────────────────────────────────
+export function loadConfig(projectRoot: string, preset?: string): Required<ApiTracerConfig> {
+  const tsconfigAlias = loadTsconfigAlias(projectRoot);
+  const fileConfig = loadFileConfig(projectRoot, preset);
+  const envConfig = loadEnvConfig(projectRoot);
+
+  return {
+    framework:  envConfig.framework  ?? fileConfig.framework  ?? DEFAULTS.framework,
+    root:       envConfig.root       ?? fileConfig.root       ?? projectRoot,
+    output:     envConfig.output     ?? fileConfig.output     ?? DEFAULTS.output,
+    apiDirs:    envConfig.apiDirs    ?? fileConfig.apiDirs    ?? DEFAULTS.apiDirs,
+    alias: {
+      ...tsconfigAlias,
+      ...DEFAULTS.alias,
+      ...fileConfig.alias,
+      ...envConfig.alias,
+    },
+    httpClient: {
+      ...DEFAULTS.httpClient,
+      ...fileConfig.httpClient,
+      ...envConfig.httpClient,
+    },
+    trace: {
+      ...DEFAULTS.trace,
+      ...fileConfig.trace,
+      ...envConfig.trace,
+    },
+    decorators: {
+      ...DEFAULTS.decorators,
+      ...fileConfig.decorators,
+    },
+  };
+}
+
+// ─────────────────────────────────────────────
+// defineConfig helper (타입 힌트용)
+// ─────────────────────────────────────────────
+export function defineConfig(config: ApiTracerConfig | ApiTracerConfigWithPresets) {
+  return config;
+}
