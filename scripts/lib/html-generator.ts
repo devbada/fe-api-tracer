@@ -86,8 +86,8 @@ function usageTree(entry: ClientApiEntry): string {
     });
 
     components.forEach((c) => {
-      const isTsx = c.file.endsWith('.tsx');
-      if (isTsx) {
+      const isPageLike = c.file.endsWith('.tsx') || c.file.endsWith('.vue');
+      if (isPageLike) {
         rows.push(`
           <div class="usage-row-page">
             <span class="usage-page-main" title="${esc(c.file)}">${esc(shortPath(c.file))}</span>
