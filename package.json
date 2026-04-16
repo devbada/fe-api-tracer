@@ -33,14 +33,21 @@
     "postman",
     "ast"
   ],
-  "author": "",
+  "author": "개발농장(devbada)",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/devbada/fe-api-tracer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/devbada/fe-api-tracer/issues"
+  },
+  "homepage": "https://github.com/devbada/fe-api-tracer#readme",
   "devDependencies": {
     "@types/node": "^18.0.0",
     "vitest": "^1.0.0"
   },
   "dependencies": {
-    "@rollup/rollup-linux-arm64-gnu": "^4.60.1",
     "dotenv": "^16.0.0",
     "ts-morph": "^20.0.0",
     "ts-node": "^10.9.0",

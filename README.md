@@ -2,6 +2,7 @@
 
 > **프론트엔드 API 문서 자동 생성기** — 프론트엔드 코드베이스를 스캔하여 모든 API 호출, 파라미터, 반환 타입, 그리고 실제로 어느 페이지에서 사용되는지를 인터랙티브 HTML 문서로 자동 생성합니다.
 
+[![npm version](https://img.shields.io/npm/v/fe-api-tracer.svg)](https://www.npmjs.com/package/fe-api-tracer)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
@@ -93,56 +94,38 @@ account.api.ts
 - Node.js 16 이상
 - 분석 대상이 될 프론트엔드 프로젝트가 있어야 합니다
 
-### Step 1 — fe-api-tracer 준비 (최초 1회)
-
-npm에 퍼블리시된 패키지를 사용한다면 이 단계는 건너뛰세요. Git에서 직접 클론한 경우에만 필요합니다.
-
-```bash
-# 1. 소스 받기
-git clone https://github.com/your-org/fe-api-tracer.git
-cd fe-api-tracer
-
-# 2. 의존성 설치
-npm install
-
-# 3. 빌드 (TypeScript → JavaScript 컴파일)
-npm run build
-
-# 4. dist/ 디렉토리가 생성되었는지 확인
-ls dist/scripts/generate-api-docs.js
-```
-
-> `npm install` 시 `prepare` 훅이 자동으로 `tsc`를 실행하므로, 보통은 `npm install`만으로 빌드까지 완료됩니다. 만약 빌드가 실패했다면 `npm run build`를 직접 실행해 주세요.
-
-### Step 2 — 여러분의 프로젝트에 설치
+### Step 1 — 여러분의 프로젝트에 설치
 
 여러분의 프론트엔드 프로젝트 디렉토리에서 실행합니다.
 
 ```bash
-# 여러분의 프로젝트 디렉토리로 이동
 cd ~/projects/my-frontend-app
 
-# 방법 A — npm에 퍼블리시된 경우
 npm install -D fe-api-tracer
-
-# 방법 B — 로컬 경로로 설치 (npm 미퍼블리시 시)
-npm install -D ../fe-api-tracer            # 상대 경로
-npm install -D /home/user/tools/fe-api-tracer  # 절대 경로
 ```
 
-로컬 경로로 설치하면 `package.json`에 다음과 같이 기록됩니다:
+<details>
+<summary>npm 대신 로컬 소스로 설치하기 (개발/기여용)</summary>
 
-```json
-{
-  "devDependencies": {
-    "fe-api-tracer": "file:../fe-api-tracer"
-  }
-}
+```bash
+# 1. 소스 받기
+git clone https://github.com/devbada/fe-api-tracer.git
+cd fe-api-tracer
+
+# 2. 의존성 설치 + 빌드 (prepare 훅이 자동으로 tsc 실행)
+npm install
+
+# 3. 여러분의 프로젝트에 로컬 경로로 설치
+cd ~/projects/my-frontend-app
+npm install -D ../fe-api-tracer            # 상대 경로
+npm install -D /home/user/tools/fe-api-tracer  # 또는 절대 경로
 ```
 
 > `npm link`를 사용할 수도 있습니다. `fe-api-tracer/` 디렉토리에서 `npm link`를 실행한 후, 여러분의 프로젝트에서 `npm link fe-api-tracer`를 실행하면 심볼릭 링크로 연결됩니다. 도구 소스를 수정하면서 바로 테스트하고 싶을 때 유용합니다.
 
-### Step 3 — 여러분의 package.json에 스크립트 등록
+</details>
+
+### Step 2 — 여러분의 package.json에 스크립트 등록
 
 ```jsonc
 // my-frontend-app/package.json  ← 여러분의 프로젝트 설정
@@ -156,14 +139,14 @@ npm install -D /home/user/tools/fe-api-tracer  # 절대 경로
     "postbuild": "fe-api-tracer"
   },
   "devDependencies": {
-    "fe-api-tracer": "file:../fe-api-tracer"
+    "fe-api-tracer": "^1.0.0"
   }
 }
 ```
 
-> `fe-api-tracer`의 자체 `package.json`과 혼동하지 마세요. 위는 **여러분의 프로젝트** `package.json`입니다. `devDependencies` 값이 `"file:../fe-api-tracer"`이면 로컬 설치, `"^1.0.0"` 같은 버전이면 npm 레지스트리 설치입니다.
+> `fe-api-tracer`의 자체 `package.json`과 혼동하지 마세요. 위는 **여러분의 프로젝트** `package.json`입니다.
 
-### Step 4 — 실행
+### Step 3 — 실행
 
 ```bash
 # 여러분의 프로젝트 루트에서 실행
