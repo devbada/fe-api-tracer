@@ -5,14 +5,14 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  id-token: write    # OIDC 필수
+  contents: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest
     environment: release
-
-    permissions:
-      id-token: write
-      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -20,15 +20,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          # registry-url 제거 — OIDC 인증과 충돌 방지
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Upgrade npm (OIDC requires npm >= 11)
+        run: npm install -g npm@^11
 
       - run: npm ci
 
       - run: npm test
 
-      # npm 최신 버전 확인 + OIDC 인증으로 퍼블리시
-      - name: Publish
-        run: |
-          npm --version
-          npm config set //registry.npmjs.org/:_authToken ''
-          npm publish --provenance --access public
+      - run: npm publish --provenance --access public
