@@ -1,6 +1,6 @@
 {
   "name": "fe-api-tracer",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "프론트엔드 API 문서 자동 생성 도구 — 서버 라우트, 클라이언트 호출, 사용처 추적",
   "main": "dist/scripts/generate-api-docs.js",
   "types": "dist/scripts/generate-api-docs.d.ts",
